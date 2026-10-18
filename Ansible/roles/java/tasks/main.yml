@@ -1,0 +1,24 @@
+---
+- name: Clé du dépôt Adoptium (Temurin)
+  ansible.builtin.get_url:
+    url: https://packages.adoptium.net/artifactory/api/gpg/key/public
+    dest: /etc/apt/keyrings/adoptium.asc
+    mode: "0644"
+
+- name: Dépôt Adoptium
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/adoptium.asc] https://packages.adoptium.net/artifactory/deb {{ ansible_distribution_release }} main"
+    filename: adoptium
+    state: present
+
+- name: Installer Temurin JDK 17
+  ansible.builtin.apt:
+    name: "{{ java_package }}"
+    state: present
+    update_cache: true
+
+- name: Définir JAVA_HOME
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    regexp: "^JAVA_HOME="
+    line: 'JAVA_HOME="{{ java_home }}"'

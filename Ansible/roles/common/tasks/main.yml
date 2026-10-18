@@ -1,0 +1,35 @@
+---
+- name: Mettre à jour le cache apt
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Installer les paquets de base
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - wget
+      - gnupg
+      - unzip
+      - tar
+      - jq
+      - python3
+      - python3-venv
+      - chrony
+    state: present
+
+- name: Fuseau horaire UTC
+  community.general.timezone:
+    name: UTC
+
+- name: Nom d'hôte = tag Name de l'instance (indispensable pour des noms de nœuds Kubernetes uniques)
+  ansible.builtin.hostname:
+    name: "{{ tags.Name }}"
+  when: tags is defined and tags.Name is defined
+
+- name: Dossier des clés de dépôts apt
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"

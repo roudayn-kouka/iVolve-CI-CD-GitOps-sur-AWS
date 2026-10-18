@@ -1,0 +1,34 @@
+---
+- name: Télécharger l'agent CloudWatch
+  ansible.builtin.get_url:
+    url: "https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}/latest/amazon-cloudwatch-agent.deb"
+    dest: /tmp/amazon-cloudwatch-agent.deb
+    mode: "0644"
+  register: cw_download
+
+- name: Installer l'agent CloudWatch
+  ansible.builtin.apt:
+    deb: /tmp/amazon-cloudwatch-agent.deb
+
+- name: Configuration de l'agent (mémoire et disque)
+  ansible.builtin.copy:
+    dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+    mode: "0644"
+    content: |
+      {
+        "agent": { "metrics_collection_interval": 60, "run_as_user": "root" },
+        "metrics": {
+          "append_dimensions": { "InstanceId": "${aws:InstanceId}" },
+          "metrics_collected": {
+            "mem":  { "measurement": ["mem_used_percent"] },
+            "disk": { "measurement": ["used_percent"], "resources": ["/"] }
+          }
+        }
+      }
+  notify: Reload cloudwatch agent
+
+- name: Activer le service
+  ansible.builtin.systemd:
+    name: amazon-cloudwatch-agent
+    enabled: true
+    state: started

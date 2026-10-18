@@ -1,0 +1,6 @@
+---
+- name: Rejoindre le cluster (aucun preflight ignoré)
+  ansible.builtin.command: "{{ hostvars[groups['_kubemaster'][0]].kubeadm_join_cmd }}"
+  args:
+    creates: /etc/kubernetes/kubelet.conf
+  no_log: true

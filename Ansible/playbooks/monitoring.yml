@@ -1,0 +1,5 @@
+---
+- name: Agent CloudWatch (mémoire et disque) sur toutes les instances
+  hosts: role_jenkins:role_k8s
+  roles:
+    - cloudwatch_agent

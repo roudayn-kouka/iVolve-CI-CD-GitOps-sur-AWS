@@ -1,0 +1,40 @@
+---
+- name: Utilisateur dédié à l'agent Jenkins
+  ansible.builtin.user:
+    name: "{{ jenkins_agent_user }}"
+    home: "{{ jenkins_agent_home }}"
+    shell: /bin/bash
+    groups: docker
+    append: true
+    create_home: true
+
+- name: Lire la clé publique générée sur le master
+  ansible.builtin.slurp:
+    src: /var/lib/jenkins/.ssh/id_ed25519.pub
+  delegate_to: "{{ groups['_jenkins_master'][0] }}"
+  register: jenkins_master_pubkey
+  run_once: true
+
+- name: Autoriser le master à se connecter à l'agent
+  ansible.posix.authorized_key:
+    user: "{{ jenkins_agent_user }}"
+    key: "{{ jenkins_master_pubkey.content | b64decode | trim }}"
+    state: present
+
+- name: Clé du dépôt Trivy
+  ansible.builtin.get_url:
+    url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+    dest: /etc/apt/keyrings/trivy.asc
+    mode: "0644"
+
+- name: Dépôt Trivy
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/trivy.asc] https://aquasecurity.github.io/trivy-repo/deb generic main"
+    filename: trivy
+    state: present
+
+- name: Installer Trivy (scan d'images)
+  ansible.builtin.apt:
+    name: trivy
+    state: present
+    update_cache: true

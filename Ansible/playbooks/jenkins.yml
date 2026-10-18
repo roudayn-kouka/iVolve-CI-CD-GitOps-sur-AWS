@@ -1,0 +1,25 @@
+---
+- name: Jenkins master - prérequis
+  hosts: _jenkins_master
+  roles:
+    - common
+    - git
+    - java
+    - docker
+    - jenkins_master
+
+- name: Jenkins agent (slave)
+  hosts: _jenkins_slave
+  roles:
+    - common
+    - git
+    - java
+    - docker
+    - jenkins_agent
+
+- name: Jenkins master - enregistrement de l'agent
+  hosts: _jenkins_master
+  roles:
+    - role: jenkins_master
+      vars:
+        jenkins_register_agent: true

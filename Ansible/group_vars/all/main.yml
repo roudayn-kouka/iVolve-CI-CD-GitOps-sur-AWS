@@ -1,0 +1,22 @@
+---
+# ---------- Versions épinglées (reproductibilité) ----------
+java_package: temurin-17-jdk
+kubernetes_version: "1.36"          # branche pkgs.k8s.io ; 1.33 (ancienne valeur) est en fin de vie
+pod_network_cidr: 10.244.0.0/16
+flannel_version: v0.28.9
+metrics_server_version: v0.9.0
+argocd_version: v3.5.2
+jenkins_plugin_manager_version: 2.15.0
+
+# ---------- Jenkins ----------
+jenkins_admin_user: admin
+jenkins_admin_password: "{{ vault_jenkins_admin_password }}"      # défini dans group_vars/all/vault.yml (chiffré)
+jenkins_dockerhub_user: "{{ vault_dockerhub_user }}"
+jenkins_dockerhub_token: "{{ vault_dockerhub_token }}"
+jenkins_github_user: "{{ vault_github_user }}"
+jenkins_github_token: "{{ vault_github_token }}"
+
+# ---------- GitOps ----------
+gitops_repo_url: "https://github.com/roudayn-kouka/CloudDevOpsProject.git"
+gitops_repo_revision: main
+ansible_user: ubuntu

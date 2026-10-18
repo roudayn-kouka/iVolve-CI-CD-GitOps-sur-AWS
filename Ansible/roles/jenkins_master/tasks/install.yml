@@ -1,0 +1,129 @@
+---
+- name: Clé du dépôt Jenkins (clé 2026 ; l'ancienne 2023 est périmée)
+  ansible.builtin.get_url:
+    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+    dest: /etc/apt/keyrings/jenkins-keyring.asc
+    mode: "0644"
+
+- name: Dépôt Jenkins LTS
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+    filename: jenkins
+    state: present
+
+- name: Installer Jenkins
+  ansible.builtin.apt:
+    name: jenkins
+    state: present
+    update_cache: true
+
+- name: Dossiers de travail (SSH, JCasC, config)
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: jenkins
+    mode: "{{ item.mode }}"
+  loop:
+    - path: /var/lib/jenkins/.ssh
+      owner: jenkins
+      mode: "0700"
+    - path: /var/lib/jenkins/casc_configs
+      owner: jenkins
+      mode: "0700"
+    - path: /etc/jenkins
+      owner: root
+      mode: "0750"
+
+- name: Paire de clés SSH pour joindre l'agent
+  community.crypto.openssh_keypair:
+    path: /var/lib/jenkins/.ssh/id_ed25519
+    type: ed25519
+    owner: jenkins
+    group: jenkins
+    comment: jenkins-master
+
+- name: Secrets de Jenkins en variables d'environnement (fichier 0600, jamais dans Git)
+  ansible.builtin.copy:
+    dest: /etc/jenkins/jenkins.env
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      JENKINS_ADMIN_PASSWORD="{{ jenkins_admin_password }}"
+      DOCKERHUB_USER="{{ jenkins_dockerhub_user }}"
+      DOCKERHUB_TOKEN="{{ jenkins_dockerhub_token }}"
+      GITHUB_USER="{{ jenkins_github_user }}"
+      GITHUB_TOKEN="{{ jenkins_github_token }}"
+  no_log: true
+  notify: Restart jenkins
+
+- name: Surcharge systemd (JCasC, pas d'assistant de démarrage)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/jenkins.service.d/override.conf
+    mode: "0644"
+    content: |
+      [Service]
+      Environment="JAVA_OPTS=-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false"
+      Environment="CASC_JENKINS_CONFIG=/var/lib/jenkins/casc_configs"
+      EnvironmentFile=/etc/jenkins/jenkins.env
+  notify: Restart jenkins
+  register: jenkins_systemd_override
+
+- name: Recharger systemd si besoin
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: jenkins_systemd_override is changed
+
+- name: Gestionnaire officiel de plugins
+  ansible.builtin.get_url:
+    url: "https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/{{ jenkins_plugin_manager_version }}/jenkins-plugin-manager-{{ jenkins_plugin_manager_version }}.jar"
+    dest: /opt/jenkins-plugin-manager.jar
+    mode: "0644"
+
+- name: Liste des plugins
+  ansible.builtin.copy:
+    dest: /etc/jenkins/plugins.txt
+    mode: "0644"
+    content: "{{ jenkins_plugins | join('\n') }}\n"
+  register: jenkins_plugins_file
+
+- name: Plugin déjà présent ?
+  ansible.builtin.stat:
+    path: /var/lib/jenkins/plugins/workflow-aggregator.jpi
+  register: jenkins_plugin_probe
+
+- name: Installer les plugins (résolution automatique des dépendances)
+  ansible.builtin.command: >
+    java -jar /opt/jenkins-plugin-manager.jar
+    --war /usr/share/java/jenkins.war
+    --plugin-file /etc/jenkins/plugins.txt
+    --plugin-download-directory /var/lib/jenkins/plugins
+  become: true
+  become_user: jenkins
+  environment:
+    JAVA_HOME: "{{ java_home | default('/usr/lib/jvm/temurin-17-jdk-amd64') }}"
+  when: jenkins_plugins_file is changed or not jenkins_plugin_probe.stat.exists
+  changed_when: true
+  notify: Restart jenkins
+
+- name: Configuration as Code
+  ansible.builtin.include_tasks: casc.yml
+
+- name: Démarrer et activer Jenkins
+  ansible.builtin.systemd:
+    name: jenkins
+    state: started
+    enabled: true
+
+- name: Appliquer les changements en attente (redémarrage éventuel)
+  ansible.builtin.meta: flush_handlers
+
+- name: Attendre que Jenkins réponde
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8080/login
+    status_code: [200, 403]
+  register: jenkins_up
+  until: jenkins_up.status in [200, 403]
+  retries: 40
+  delay: 5

@@ -1,0 +1,20 @@
+---
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1
+
+# Seules les instances du projet, et seulement si elles tournent
+filters:
+  tag:Project: ivolve
+  instance-state-name: running
+
+keyed_groups:
+  # _jenkins_master, _jenkins_slave, _kubemaster, _kubenode1
+  - key: tags.Name
+    prefix: ""
+  # role_jenkins, role_k8s
+  - key: tags.Role
+    prefix: role
+
+compose:
+  ansible_host: public_ip_address

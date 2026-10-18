@@ -1,0 +1,3 @@
+---
+jenkins_agent_user: jenkins
+jenkins_agent_home: /home/jenkins

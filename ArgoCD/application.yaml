@@ -1,0 +1,32 @@
+# Application ArgoCD déclarative (GitOps "pur") : appliquée par le rôle Ansible k8s_addons,
+# ou manuellement :  kubectl apply -n argocd -f ArgoCD/application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ivolve-webapp
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # ⚠️ Adapter à votre dépôt
+    repoURL: https://github.com/roudayn-kouka/CloudDevOpsProject.git
+    targetRevision: main
+    path: k8s-manifests # ArgoCD détecte kustomization.yaml automatiquement
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ivolve
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

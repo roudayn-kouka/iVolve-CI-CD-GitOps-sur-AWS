@@ -1,0 +1,7 @@
+---
+# 1) cp vault.yml.example vault.yml   2) renseigner les valeurs   3) ansible-vault encrypt group_vars/all/vault.yml
+vault_jenkins_admin_password: "CHANGEZ-MOI-mot-de-passe-long"
+vault_dockerhub_user: "votre-utilisateur-dockerhub"
+vault_dockerhub_token: "dckr_pat_xxxxxxxx"          # Access Token DockerHub (pas le mot de passe du compte)
+vault_github_user: "roudayn-kouka"
+vault_github_token: "ghp_xxxxxxxx"                  # PAT avec droit d'écriture sur le dépôt (commit du tag d'image)

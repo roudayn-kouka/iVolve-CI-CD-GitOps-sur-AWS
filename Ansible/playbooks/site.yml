@@ -1,0 +1,10 @@
+---
+# Déploiement complet :  ansible-playbook playbooks/site.yml
+- name: Jenkins (master + agent)
+  ansible.builtin.import_playbook: jenkins.yml
+
+- name: Cluster Kubernetes + ArgoCD
+  ansible.builtin.import_playbook: kubernetes.yml
+
+- name: Supervision CloudWatch
+  ansible.builtin.import_playbook: monitoring.yml

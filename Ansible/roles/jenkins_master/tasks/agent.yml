@@ -1,0 +1,25 @@
+---
+- name: Adresse privée de l'agent
+  ansible.builtin.set_fact:
+    jenkins_agent_host: "{{ hostvars[groups['_jenkins_slave'][0]].private_ip_address }}"
+
+- name: Empreinte SSH de l'agent
+  ansible.builtin.command: "ssh-keyscan -t ed25519 {{ jenkins_agent_host }}"
+  register: jenkins_agent_hostkey
+  changed_when: false
+
+- name: Faire confiance à l'agent (known_hosts de l'utilisateur jenkins)
+  ansible.builtin.lineinfile:
+    path: /var/lib/jenkins/.ssh/known_hosts
+    create: true
+    owner: jenkins
+    group: jenkins
+    mode: "0600"
+    regexp: "^{{ jenkins_agent_host | regex_escape }} "
+    line: "{{ jenkins_agent_hostkey.stdout_lines | reject('match', '^#') | first }}"
+
+- name: JCasC avec le nœud agent
+  ansible.builtin.include_tasks: casc.yml
+
+- name: Appliquer
+  ansible.builtin.meta: flush_handlers

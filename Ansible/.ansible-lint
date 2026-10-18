@@ -1,0 +1,9 @@
+---
+profile: moderate
+exclude_paths:
+  - collections/
+  - inventory/
+skip_list:
+  - yaml[line-length]
+  - var-naming[no-role-prefix]
+  - name[casing]

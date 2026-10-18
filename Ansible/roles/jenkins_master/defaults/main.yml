@@ -1,0 +1,24 @@
+---
+jenkins_register_agent: false
+jenkins_agent_name: slave
+jenkins_agent_label: slave
+jenkins_agent_remote_fs: /home/jenkins
+jenkins_job_name: ivolve-webapp
+jenkins_jenkinsfile_path: Jenkins/Jenkinsfile
+jenkins_plugins:
+  - configuration-as-code
+  - job-dsl
+  - git
+  - github
+  - workflow-aggregator
+  - pipeline-stage-view
+  - credentials-binding
+  - plain-credentials
+  - ssh-credentials
+  - ssh-slaves
+  - docker-workflow
+  - pipeline-utility-steps
+  - matrix-auth
+  - timestamper
+  - ws-cleanup
+  - junit

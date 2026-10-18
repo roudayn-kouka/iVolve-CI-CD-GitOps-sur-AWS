@@ -1,0 +1,73 @@
+---
+- name: Attendre que le nœud control-plane soit Ready
+  ansible.builtin.command: kubectl wait --for=condition=Ready node --all --timeout=300s
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig }}"
+  changed_when: false
+
+# ---------- metrics-server (requis par le HPA) ----------
+- name: Installer metrics-server
+  ansible.builtin.command: "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/download/{{ metrics_server_version }}/components.yaml"
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig }}"
+  register: metrics_apply
+  changed_when: "'created' in metrics_apply.stdout or 'configured' in metrics_apply.stdout"
+
+- name: Arguments actuels de metrics-server
+  ansible.builtin.command: kubectl -n kube-system get deploy metrics-server -o jsonpath='{.spec.template.spec.containers[0].args}'
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig }}"
+  register: metrics_args
+  changed_when: false
+
+# kubeadm signe les certificats kubelet avec une CA que metrics-server ne connaît pas
+- name: Autoriser les certificats kubelet auto-signés (cluster kubeadm)
+  ansible.builtin.command: >
+    kubectl -n kube-system patch deploy metrics-server --type=json
+    -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig }}"
+  when: "'--kubelet-insecure-tls' not in metrics_args.stdout"
+  changed_when: true
+
+# ---------- ArgoCD ----------
+- name: Namespace argocd
+  ansible.builtin.shell: |
+    set -o pipefail
+    kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+  args:
+    executable: /bin/bash
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig }}"
+  register: argocd_ns
+  changed_when: "'created' in argocd_ns.stdout"
+
+- name: "Installer ArgoCD (server-side apply : CRD volumineuses)"
+  ansible.builtin.command: >
+    kubectl apply -n argocd --server-side --force-conflicts
+    -f https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_version }}/manifests/install.yaml
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig }}"
+  register: argocd_apply
+  changed_when: "'serverside-applied' in argocd_apply.stdout"
+
+- name: Attendre la CRD Application
+  ansible.builtin.command: kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=120s
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig }}"
+  changed_when: false
+
+- name: Attendre argocd-server
+  ansible.builtin.command: kubectl -n argocd rollout status deploy/argocd-server --timeout=300s
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig }}"
+  changed_when: false
+
+- name: Déclarer l'Application GitOps (ivolve-webapp)
+  ansible.builtin.command: kubectl apply -f -
+  args:
+    stdin: "{{ lookup('ansible.builtin.template', 'application.yaml.j2') }}"
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig }}"
+  register: argocd_app
+  changed_when: "'created' in argocd_app.stdout or 'configured' in argocd_app.stdout"

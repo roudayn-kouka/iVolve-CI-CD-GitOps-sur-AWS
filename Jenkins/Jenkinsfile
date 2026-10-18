@@ -1,0 +1,127 @@
+// Pipeline CI/CD iVolve — test → build → scan → push → mise à jour GitOps
+// Autonome : aucune bibliothèque partagée requise.
+// Credentials Jenkins attendus (créés par Ansible/JCasC) :
+//   docker  : DockerHub (username + access token)
+//   github  : GitHub (username + PAT avec droit d'écriture)
+
+// Le commit de déploiement est signé "jenkins-ci" : on l'ignore pour ne pas boucler sur son propre push
+def isBotCommit() { return env.SKIP_BUILD == 'true' }
+def isMainBranch() { return env.GIT_BRANCH in ['origin/main', 'main'] }
+
+pipeline {
+    agent { label 'slave' }
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        skipDefaultCheckout(true)
+    }
+
+    environment {
+        // ⚠️ À adapter à votre compte
+        DOCKER_REPO    = 'roudayn-kouka/ivolve-webapp'
+        GITOPS_REPO    = 'github.com/roudayn-kouka/CloudDevOpsProject.git'
+        GITOPS_BRANCH  = 'main'
+        BOT_NAME       = 'jenkins-ci'
+        // L'image n'est PAS publiée si une vulnérabilité de cette sévérité (avec correctif disponible) est trouvée
+        TRIVY_SEVERITY = 'HIGH,CRITICAL'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_SHA   = sh(script: 'git rev-parse --short=8 HEAD', returnStdout: true).trim()
+                    env.IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_SHA}"      // immuable et traçable
+                    env.IMAGE     = "${env.DOCKER_REPO}:${env.IMAGE_TAG}"
+                    def author = sh(script: 'git log -1 --pretty=%an', returnStdout: true).trim()
+                    if (author == env.BOT_NAME) {
+                        env.SKIP_BUILD = 'true'
+                        currentBuild.result = 'NOT_BUILT'
+                        echo 'Dernier commit = déploiement automatique : build ignoré.'
+                    }
+                }
+                echo "Image cible : ${env.IMAGE}"
+            }
+        }
+
+        stage('Tests unitaires') {
+            when { expression { !isBotCommit() } }
+            steps {
+                // Conteneur jetable, exécuté avec l'UID de l'agent (pas de fichiers root dans le workspace)
+                sh '''
+                    docker run --rm --user "$(id -u):$(id -g)" \
+                      -e HOME=/tmp -e PIP_CACHE_DIR=/tmp/pip -e PYTHONDONTWRITEBYTECODE=1 \
+                      -v "$PWD/app:/src" -w /src python:3.12-slim \
+                      sh -c "pip install --user --quiet -r requirements.txt -r requirements-dev.txt && python -m pytest -q -p no:cacheprovider"
+                '''
+            }
+        }
+
+        stage('Build image') {
+            when { expression { !isBotCommit() } }
+            steps {
+                sh 'docker build --pull --build-arg APP_VERSION=${IMAGE_TAG} -t ${IMAGE} app'
+            }
+        }
+
+        stage('Scan Trivy (avant publication)') {
+            when { expression { !isBotCommit() } }
+            steps {
+                // Rapport complet (informatif) puis contrôle bloquant
+                sh 'trivy image --no-progress --severity ${TRIVY_SEVERITY} --format table ${IMAGE} | tee trivy-report.txt'
+                sh 'trivy image --no-progress --severity ${TRIVY_SEVERITY} --ignore-unfixed --exit-code 1 ${IMAGE}'
+            }
+            post {
+                always { archiveArtifacts artifacts: 'trivy-report.txt', allowEmptyArchive: true }
+            }
+        }
+
+        stage('Push DockerHub') {
+            when { expression { !isBotCommit() && isMainBranch() } }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker', usernameVariable: 'DH_USER', passwordVariable: 'DH_TOKEN')]) {
+                    sh '''
+                        echo "$DH_TOKEN" | docker login -u "$DH_USER" --password-stdin
+                        docker push ${IMAGE}
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Mise à jour GitOps') {
+            when { expression { !isBotCommit() && isMainBranch() } }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'github', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                    sh '''
+                        set -e
+                        URL="https://${GH_USER}:${GH_TOKEN}@${GITOPS_REPO}"
+                        git config user.name  "${BOT_NAME}"
+                        git config user.email "${BOT_NAME}@users.noreply.github.com"
+                        # Seule la ligne newTag de kustomization.yaml est modifiée
+                        sed -i -E "s|^(\\s*newTag:).*|\\1 \\"${IMAGE_TAG}\\"|" k8s-manifests/kustomization.yaml
+                        if git diff --quiet k8s-manifests/kustomization.yaml; then echo "Rien à commiter"; exit 0; fi
+                        git add k8s-manifests/kustomization.yaml
+                        git commit -m "ci: déploiement ${IMAGE_TAG}"
+                        git fetch "$URL" ${GITOPS_BRANCH}
+                        git rebase FETCH_HEAD
+                        git push "$URL" HEAD:${GITOPS_BRANCH}
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker rmi ${IMAGE} 2>/dev/null || true'
+            cleanWs()
+        }
+        success { echo "✅ ${env.IMAGE} publiée — ArgoCD synchronise le cluster." }
+        failure { echo '❌ Pipeline en échec : consultez le stage rouge (tests, scan ou push).' }
+    }
+}

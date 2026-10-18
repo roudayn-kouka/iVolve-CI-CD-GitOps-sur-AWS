@@ -1,0 +1,11 @@
+---
+- name: Installer Git
+  ansible.builtin.apt:
+    name: git
+    state: present
+
+- name: Branche par défaut = main
+  community.general.git_config:
+    name: init.defaultBranch
+    value: main
+    scope: system

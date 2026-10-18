@@ -1,0 +1,8 @@
+---
+- name: Installation de Jenkins et configuration initiale
+  ansible.builtin.include_tasks: install.yml
+  when: not jenkins_register_agent
+
+- name: Enregistrement de l'agent
+  ansible.builtin.include_tasks: agent.yml
+  when: jenkins_register_agent

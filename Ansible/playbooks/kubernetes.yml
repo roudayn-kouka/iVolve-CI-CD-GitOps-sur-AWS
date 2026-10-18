@@ -1,0 +1,27 @@
+---
+- name: Prérequis Kubernetes (containerd, kubeadm, kubelet, kubectl)
+  hosts: _kubemaster:_kubenode1
+  roles:
+    - common
+    - kubeadm
+
+- name: Initialisation du control-plane
+  hosts: _kubemaster
+  tasks:
+    - name: Initialiser le cluster
+      ansible.builtin.import_role:
+        name: kubeadm
+        tasks_from: init_master.yml
+
+- name: Jonction des workers
+  hosts: _kubenode1
+  tasks:
+    - name: Rejoindre le cluster
+      ansible.builtin.import_role:
+        name: kubeadm
+        tasks_from: join_node.yml
+
+- name: Composants du cluster (metrics-server, ArgoCD, Application GitOps)
+  hosts: _kubemaster
+  roles:
+    - k8s_addons

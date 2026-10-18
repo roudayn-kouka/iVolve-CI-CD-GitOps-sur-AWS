@@ -1,0 +1,81 @@
+jenkins:
+  systemMessage: "iVolve CI — configuré par Ansible + JCasC. Ne pas modifier à la main."
+  numExecutors: 0
+  crumbIssuer: standard
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "{{ jenkins_admin_user }}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+{% if jenkins_register_agent %}
+  nodes:
+    - permanent:
+        name: "{{ jenkins_agent_name }}"
+        labelString: "{{ jenkins_agent_label }}"
+        numExecutors: 2
+        remoteFS: "{{ jenkins_agent_remote_fs }}"
+        launcher:
+          ssh:
+            host: "{{ jenkins_agent_host }}"
+            port: 22
+            credentialsId: agent-ssh
+            sshHostKeyVerificationStrategy: "knownHostsFileKeyVerificationStrategy"
+{% endif %}
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: docker
+              description: DockerHub (access token)
+              username: "${DOCKERHUB_USER}"
+              password: "${DOCKERHUB_TOKEN}"
+          - usernamePassword:
+              scope: GLOBAL
+              id: github
+              description: GitHub (PAT, droit d'écriture sur le dépôt)
+              username: "${GITHUB_USER}"
+              password: "${GITHUB_TOKEN}"
+          - basicSSHUserPrivateKey:
+              scope: GLOBAL
+              id: agent-ssh
+              description: Clé du master vers l'agent
+              username: "{{ jenkins_agent_user | default('jenkins') }}"
+              privateKeySource:
+                directEntry:
+                  privateKey: |
+{{ (jenkins_agent_private_key.content | b64decode) | indent(20, true) }}
+
+unclassified:
+  location:
+    url: "http://{{ ansible_host }}:8080/"
+
+jobs:
+  - script: >
+      pipelineJob('{{ jenkins_job_name }}') {
+        description('Pipeline CI/CD iVolve : test, build, scan, push, mise à jour GitOps')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('{{ gitops_repo_url }}')
+                  credentials('github')
+                }
+                branch('*/{{ gitops_repo_revision }}')
+              }
+            }
+            scriptPath('{{ jenkins_jenkinsfile_path }}')
+            lightweight(true)
+          }
+        }
+        triggers {
+          scm('H/5 * * * *')
+        }
+      }

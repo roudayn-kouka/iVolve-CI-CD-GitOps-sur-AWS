@@ -1,0 +1,16 @@
+---
+- name: Lire la clé privée de l'agent (pour le credential SSH)
+  ansible.builtin.slurp:
+    src: /var/lib/jenkins/.ssh/id_ed25519
+  register: jenkins_agent_private_key
+  no_log: true
+
+- name: Déployer jenkins.yaml (JCasC)
+  ansible.builtin.template:
+    src: jenkins.yaml.j2
+    dest: /var/lib/jenkins/casc_configs/jenkins.yaml
+    owner: jenkins
+    group: jenkins
+    mode: "0600"
+  no_log: true
+  notify: Restart jenkins
