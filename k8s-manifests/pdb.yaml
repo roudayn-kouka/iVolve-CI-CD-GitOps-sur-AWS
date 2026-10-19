@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ivolve-pdb
+  namespace: ivolve
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ivolve-app

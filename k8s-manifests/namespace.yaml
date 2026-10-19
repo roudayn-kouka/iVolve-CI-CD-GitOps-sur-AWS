@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ivolve
+  labels:
+    app.kubernetes.io/part-of: ivolve
+    # Pod Security Admission : refuse les pods privilégiés dans ce namespace
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

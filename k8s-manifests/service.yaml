@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ivolve-service
+  namespace: ivolve
+  labels:
+    app: ivolve-app
+spec:
+  # NodePort fixe : accessible sans Ingress sur http://<IP-publique-d'un-nœud>:30080
+  type: NodePort
+  selector:
+    app: ivolve-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: 30080

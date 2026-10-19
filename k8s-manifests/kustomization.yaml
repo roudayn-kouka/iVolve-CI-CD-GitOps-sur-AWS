@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+
+# Mis à jour par le stage "Mise à jour GitOps" du Jenkinsfile (ne modifier que newName/newTag).
+images:
+  - name: ivolve-webapp
+    newName: docker.io/roudayn-kouka/ivolve-webapp
+    newTag: "1"
