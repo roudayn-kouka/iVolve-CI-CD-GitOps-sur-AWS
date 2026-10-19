@@ -1,0 +1,3 @@
+bucket         = "CHANGEZ-MOI-ivolve-terraform-state"
+dynamodb_table = "ivolve-terraform-lock"
+region         = "us-east-1"

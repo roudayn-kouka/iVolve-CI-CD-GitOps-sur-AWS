@@ -1,0 +1,12 @@
+# État et caches Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log
+# Valeurs locales (copiez les *.example)
+terraform.tfvars
+backend.hcl
+*.auto.tfvars
+# Clés
+*.pem
+# NB : .terraform.lock.hcl DOIT être commité (reproductibilité des versions de providers)

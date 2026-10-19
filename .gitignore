@@ -1,0 +1,16 @@
+# macOS / éditeurs
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Secrets — ne JAMAIS commiter
+*.pem
+.vault_pass
+Ansible/group_vars/all/vault.yml.dec
+.env

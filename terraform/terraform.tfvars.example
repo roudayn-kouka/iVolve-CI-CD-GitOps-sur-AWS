@@ -1,0 +1,17 @@
+aws_region   = "us-east-1"
+project_name = "ivolve"
+vpc_cidr     = "10.0.0.0/16"
+subnet_cidr  = ["10.0.1.0/24", "10.0.2.0/24"]
+az           = ["us-east-1a", "us-east-1b"]
+key_name     = "jenkins-key"
+
+# ⚠️ Votre IP publique (curl -s ifconfig.me) — jamais 0.0.0.0/0 pour l'administration
+admin_cidrs = ["203.0.113.10/32"]
+
+# Qui peut atteindre l'application (NodePort 30080). Par défaut : admin_cidrs.
+# app_allowed_cidrs = ["0.0.0.0/0"]
+
+# Reçoit les alarmes CloudWatch (confirmer l'abonnement dans l'e-mail reçu). Vide = pas d'abonnement.
+alert_email = ""
+
+# ami_id = "ami-xxxxxxxx"   # optionnel : par défaut Ubuntu 22.04 LTS la plus récente (Canonical)
